@@ -1,0 +1,12 @@
+name = "new_test_profile"
+sample_rate = 44100
+bpm = 120
+beats_per_bar = 4
+beat_unit = 4
+num_meassures_fallback = 128
+
+[sound]
+frequency_hz = 1400.0
+accent_frequency_hz = 800.0
+sound_duration_secs = 0.2
+envelope_decay_secs = 0.1
