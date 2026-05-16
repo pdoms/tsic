@@ -25,5 +25,7 @@ TBD
 - [ ] play directly from binary
 - [ ] allow moving accent(s)
 - [ ] more choices for click sounds 
+- [ ] visualize in terminal???
+- [ ] non-quarter notes
 
 

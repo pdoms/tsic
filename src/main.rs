@@ -185,6 +185,15 @@ fn main() {
                 }
             }
         }
+        args::Cmd::Insert {
+            name,
+            index,
+            bpm,
+            time_sig,
+            measures,
+        } => todo!(),
+        args::Cmd::Midi { name, outfile } => todo!(),
+        args::Cmd::Play { name } => todo!(),
     }
 }
 

@@ -58,7 +58,9 @@ pub enum Cmd {
     ProjectsList,
     /// Prints the project of the provided name to stdout.
     /// Note: the profile is not printed.
-    Project { name: String },
+    Project {
+        name: String,
+    },
     /// Creates a new project
     New {
         name: String,
@@ -83,10 +85,38 @@ pub enum Cmd {
         #[arg(long, short)]
         measures: Option<u32>,
     },
-    /// writes the project to disk.
+    /// insert a section at the provided index.
+    /// Omitted values are taken from the previous
+    /// section. If there is  no previous
+    /// section it defaults to profile defaults.
+    Insert {
+        name: String,
+        /// the index at which the section should be inserted
+        #[arg(long, short)]
+        index: usize,
+        /// Beats Per Minute
+        #[arg(long, short)]
+        bpm: Option<u32>,
+        /// Time Signature
+        #[arg(long, short)]
+        time_sig: Option<String>,
+        /// Number of Measures this section has
+        #[arg(long, short)]
+        measures: u32,
+    },
+    /// writes the project to disk in the wav format.
     Wav {
         name: String,
         /// provide path or name to outfile. Defaults to "./Wav.name.wav"
         outfile: Option<PathBuf>,
+    },
+    /// writes the project to disk in the midi format.
+    Midi {
+        name: String,
+        /// provide path or name to outfile. Defaults to "./Wav.name.wav"
+        outfile: Option<PathBuf>,
+    },
+    Play {
+        name: String,
     },
 }
