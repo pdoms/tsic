@@ -104,7 +104,29 @@ pub enum Cmd {
         #[arg(long, short)]
         measures: u32,
     },
-    /// writes the project to disk in the wav format.
+    /// Edit a section
+    Edit {
+        name: String,
+        /// the index/position of the section to be edited
+        #[arg(long, short)]
+        position: usize,
+        /// Beats Per Minute
+        #[arg(long, short)]
+        bpm: Option<u32>,
+        /// Time Signature
+        #[arg(long, short)]
+        time_sig: Option<String>,
+        /// Number of Measures this section has
+        #[arg(long, short)]
+        measures: Option<u32>,
+    },
+    /// Remove a section
+    RemoveSection {
+        name: String,
+        /// the index/position of the section to be edited
+        #[arg(long, short)]
+        position: usize,
+    },
     Wav {
         /// name of the project
         name: String,

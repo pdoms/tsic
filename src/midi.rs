@@ -4,7 +4,7 @@ use midly::{Format::SingleTrack, Header, Smf, Timing::Metrical, Track};
 
 use crate::{
     config::Config,
-    section::{Section, MIN_IN_SEC, QUARTER_NOTE},
+    section::{MIN_IN_SEC, QUARTER_NOTE, Section},
 };
 
 const DEFAULT_TICKS_PER_BEAT: u16 = 480;
@@ -102,44 +102,44 @@ pub fn write_midi(
             last_tick = cursor_ticks;
         }
 
-            for _ in 0..measures {
-                for beat in 0..time_sig.beats_per_bar {
-                    let (note, vel) = if beat == 0 {
-                        (midi_config.note_accent, midi_config.velocity_accent)
-                    } else {
-                        (midi_config.note_normal, midi_config.velocity_normal)
-                    };
-                    let note_on_tick = cursor_ticks;
-                    cursor_ticks += beat_dur_ticks;
+        for _ in 0..measures {
+            for beat in 0..time_sig.beats_per_bar {
+                let (note, vel) = if beat == 0 {
+                    (midi_config.note_accent, midi_config.velocity_accent)
+                } else {
+                    (midi_config.note_normal, midi_config.velocity_normal)
+                };
+                let note_on_tick = cursor_ticks;
+                cursor_ticks += beat_dur_ticks;
 
-                    //NoteOn
-                    let delta = note_on_tick.saturating_sub(last_tick);
-                    track.push(midly::TrackEvent {
-                        delta: delta.into(),
-                        kind: midly::TrackEventKind::Midi {
-                            channel: midi_config.channel.into(),
-                            message: midly::MidiMessage::NoteOn {
-                                key: note.into(),
-                                vel: vel.into(),
-                            },
+                //NoteOn
+                let delta = note_on_tick.saturating_sub(last_tick);
+                track.push(midly::TrackEvent {
+                    delta: delta.into(),
+                    kind: midly::TrackEventKind::Midi {
+                        channel: midi_config.channel.into(),
+                        message: midly::MidiMessage::NoteOn {
+                            key: note.into(),
+                            vel: vel.into(),
                         },
-                    });
+                    },
+                });
 
-                    //Note off
-                    track.push(midly::TrackEvent {
-                        delta: midi_config.duration.into(),
-                        kind: midly::TrackEventKind::Midi {
-                            channel: midi_config.channel.into(),
-                            message: midly::MidiMessage::NoteOff {
-                                key: note.into(),
-                                vel: 0.into(),
-                            },
+                //Note off
+                track.push(midly::TrackEvent {
+                    delta: midi_config.duration.into(),
+                    kind: midly::TrackEventKind::Midi {
+                        channel: midi_config.channel.into(),
+                        message: midly::MidiMessage::NoteOff {
+                            key: note.into(),
+                            vel: 0.into(),
                         },
-                    });
-                    last_tick = note_on_tick + midi_config.duration;
-                    cursor_secs += beat_dur_secs;
-                }
+                    },
+                });
+                last_tick = note_on_tick + midi_config.duration;
+                cursor_secs += beat_dur_secs;
             }
+        }
         last_bpm = Some(section.bpm);
     }
 

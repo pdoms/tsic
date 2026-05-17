@@ -16,6 +16,18 @@ impl Section {
     pub fn beat_duration(&self) -> f64 {
         MIN_IN_SEC / self.bpm as f64 / (self.time_signature.beat_unit as f64 / QUARTER_NOTE)
     }
+
+    pub fn bpm(&mut self, bpm: u32) {
+        self.bpm = bpm;
+    }
+    pub fn time_signature_str(&mut self, time_sig: &str) -> Result<(), String> {
+        self.time_signature = TimeSignature::try_from(time_sig)?;
+        Ok(())
+    }
+
+    pub fn measures(&mut self, measures: Option<u32>) {
+        self.measures = measures;
+    }
 }
 
 /// beats_per_bar/beat_unit

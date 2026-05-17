@@ -170,6 +170,7 @@ fn main() {
                         eprintln!("{err}");
                         std::process::exit(1);
                     }
+                    println!("[tsic] inserted section at position {position}");
                     if let Err(err) = project.to_disk() {
                         eprintln!("[tsic] - error writing project {name}: {err}");
                         std::process::exit(1);
@@ -181,7 +182,54 @@ fn main() {
                 }
             }
         }
-
+        args::Cmd::Edit {
+            name,
+            position,
+            bpm,
+            time_sig,
+            measures,
+        } => {
+            let file_path = projects_path.join(format!("{name}.toml"));
+            match Project::from_disk(&file_path) {
+                Ok(mut project) => {
+                    if let Err(err) = project.edit_section(position, measures, bpm, time_sig) {
+                        eprintln!("{err}");
+                        std::process::exit(1);
+                    }
+                    println!("[tsic] edited section at position {position}");
+                    if let Err(err) = project.to_disk() {
+                        eprintln!("[tsic] - error writing project {name}: {err}");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        args::Cmd::RemoveSection { name, position } => {
+            let file_path = projects_path.join(format!("{name}.toml"));
+            match Project::from_disk(&file_path) {
+                Ok(mut project) => {
+                    if project.remove_section(position) {
+                        println!("[tsic] removed section from position {position}");
+                    } else {
+                        println!(
+                            "[tsic] skipped removing section from position {position} (out of bounds)"
+                        );
+                    }
+                    if let Err(err) = project.to_disk() {
+                        eprintln!("[tsic] - error writing project {name}: {err}");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    std::process::exit(1);
+                }
+            }
+        }
         args::Cmd::ProfilesList => list_entities(profiles_path, "profiles"),
         args::Cmd::ProjectsList => list_entities(projects_path, "projects"),
         args::Cmd::Project { name } => {

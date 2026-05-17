@@ -62,6 +62,38 @@ impl Project {
         self.sections.get(at)
     }
 
+    pub fn edit_section(
+        &mut self,
+        position: usize,
+        measures: Option<u32>,
+        bpm: Option<u32>,
+        time_sig: Option<String>,
+    ) -> Result<(), String> {
+        let section = self.sections.get_mut(position).ok_or(format!(
+            "[tsic] could not get section at position {position}"
+        ))?;
+
+        if measures.is_some() {
+            section.measures(measures);
+        }
+        if let Some(beats_per_minute) = bpm {
+            section.bpm(beats_per_minute);
+        }
+        if let Some(ts) = time_sig {
+            section.time_signature_str(&ts)?;
+        }
+        Ok(())
+    }
+
+    pub fn remove_section(&mut self, position: usize) -> bool {
+        if position < self.sections.len() {
+            self.sections.remove(position);
+            true
+        } else {
+            false
+        }
+    }
+
     // measure needs to be provided in this case
     // so we will not need to validate here.
     // If it falls back to be the last one,
