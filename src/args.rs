@@ -104,17 +104,64 @@ pub enum Cmd {
         #[arg(long, short)]
         measures: u32,
     },
-    /// writes the project to disk in the wav format.
+    /// Edit a section
+    Edit {
+        name: String,
+        /// the index/position of the section to be edited
+        #[arg(long, short)]
+        position: usize,
+        /// Beats Per Minute
+        #[arg(long, short)]
+        bpm: Option<u32>,
+        /// Time Signature
+        #[arg(long, short)]
+        time_sig: Option<String>,
+        /// Number of Measures this section has
+        #[arg(long, short)]
+        measures: Option<u32>,
+    },
+    /// Remove a section
+    RemoveSection {
+        name: String,
+        /// the index/position of the section to be edited
+        #[arg(long, short)]
+        position: usize,
+    },
     Wav {
+        /// name of the project
         name: String,
         /// provide path or name to outfile. Defaults to "./Wav.name.wav"
         outfile: Option<PathBuf>,
     },
     /// writes the project to disk in the midi format.
+    /// Midi defaults can be printed but not used in
+    /// a profile, so values are provided here
     Midi {
+        /// name of the project
         name: String,
         /// provide path or name to outfile. Defaults to "./Wav.name.wav"
         outfile: Option<PathBuf>,
+        /// midi channel (0-15 - zero-indexed)
+        #[arg(long, short)]
+        channel: Option<u8>,
+        /// ticks per beat (quarter note)
+        #[arg(long, short)]
+        ticks_per_beat: Option<u16>,
+        /// accent note
+        #[arg(long, short)]
+        accent: Option<u8>,
+        /// normal (click) note
+        #[arg(long, short)]
+        normal: Option<u8>,
+        /// how the note is held
+        #[arg(long, short)]
+        duration: Option<u32>,
+        /// velocity accent
+        #[arg(long)]
+        vel_accent: Option<u8>,
+        /// velocity normal
+        #[arg(long)]
+        vel_normal: Option<u8>,
     },
     Play {
         name: String,

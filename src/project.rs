@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::{Config, PROFILE_DIR, try_load_profile},
+    midi::{MidiConfigs, write_midi},
     section::{Section, TimeSignature},
     snd::click,
 };
@@ -59,6 +60,38 @@ impl Project {
     #[cfg(test)]
     pub fn get_section(&self, at: usize) -> Option<&Section> {
         self.sections.get(at)
+    }
+
+    pub fn edit_section(
+        &mut self,
+        position: usize,
+        measures: Option<u32>,
+        bpm: Option<u32>,
+        time_sig: Option<String>,
+    ) -> Result<(), String> {
+        let section = self.sections.get_mut(position).ok_or(format!(
+            "[tsic] could not get section at position {position}"
+        ))?;
+
+        if measures.is_some() {
+            section.measures(measures);
+        }
+        if let Some(beats_per_minute) = bpm {
+            section.bpm(beats_per_minute);
+        }
+        if let Some(ts) = time_sig {
+            section.time_signature_str(&ts)?;
+        }
+        Ok(())
+    }
+
+    pub fn remove_section(&mut self, position: usize) -> bool {
+        if position < self.sections.len() {
+            self.sections.remove(position);
+            true
+        } else {
+            false
+        }
     }
 
     // measure needs to be provided in this case
@@ -271,6 +304,10 @@ impl Project {
         println!("[tsic] wrote {}", outpath.to_str().unwrap());
 
         Ok(())
+    }
+
+    pub fn to_midi(&self, midi_config: &MidiConfigs, path: &Path) -> Result<(), String> {
+        write_midi(&self.sections, midi_config, &self.profile, path)
     }
 }
 

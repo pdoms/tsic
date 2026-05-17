@@ -21,11 +21,12 @@ TBD
 ## What's Next
 
 - [x] insert sections with an index
-- [ ] create midi file
+- [X] create midi file
+- [ ] edit section
 - [ ] play directly from binary
+- [ ] visualize in terminal
 - [ ] allow moving accent(s)
 - [ ] more choices for click sounds 
-- [ ] visualize in terminal???
 - [ ] non-quarter notes
 
 

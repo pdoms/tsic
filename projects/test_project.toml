@@ -3,8 +3,8 @@ profile = "default"
 file_path = "./projects/test_project.toml"
 
 [[sections]]
-bpm = 160
-measures = 10
+bpm = 180
+measures = 4
 
 [sections.time_signature]
 beats_per_bar = 4
@@ -12,15 +12,15 @@ beat_unit = 4
 
 [[sections]]
 bpm = 120
-measures = 10
+measures = 2
 
 [sections.time_signature]
 beats_per_bar = 4
 beat_unit = 4
 
 [[sections]]
-bpm = 116
-measures = 24
+bpm = 80
+measures = 4
 
 [sections.time_signature]
 beats_per_bar = 4
