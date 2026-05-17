@@ -56,6 +56,65 @@ impl Project {
         }
     }
 
+    #[cfg(test)]
+    pub fn get_section(&self, at: usize) -> Option<&Section> {
+        self.sections.get(at)
+    }
+
+    // measure needs to be provided in this case
+    // so we will not need to validate here.
+    // If it falls back to be the last one,
+    // we call [Self::append_section()] anyways,
+    // which provisions for last section being endless
+    pub fn insert_section_at(
+        &mut self,
+        position: usize,
+        measures: u32,
+        bpm: Option<u32>,
+        time_sig: Option<String>,
+    ) -> Result<(), String> {
+        // check position in bounds, if out of bounds, we warn but still
+        // append
+        if position >= self.sections.len() {
+            println!("[tsic] warning: position out of bounds - will append instead");
+            return self.append_section(bpm, time_sig, Some(measures));
+        }
+
+        let section = if position == 0 {
+            // if index is null, use profile for missing values
+            // otherwise get section at position-1 for values
+            let time_signature = if let Some(ts_s) = time_sig {
+                TimeSignature::try_from(ts_s.as_str())?
+            } else {
+                TimeSignature {
+                    beats_per_bar: self.profile.beats_per_bar,
+                    beat_unit: self.profile.beat_unit,
+                }
+            };
+            Section {
+                bpm: bpm.unwrap_or(self.profile.bpm),
+                time_signature,
+                measures: Some(measures),
+            }
+        } else {
+            let prev = &self.sections[position - 1];
+            let time_signature = if let Some(ts_s) = time_sig {
+                TimeSignature::try_from(ts_s.as_str())?
+            } else {
+                prev.time_signature.clone()
+            };
+            Section {
+                bpm: bpm.unwrap_or(prev.bpm),
+                time_signature,
+                measures: Some(measures),
+            }
+        };
+
+        // insert at postion
+        self.sections.insert(position, section);
+        Ok(())
+    }
+
     pub fn append_section(
         &mut self,
         bpm: Option<u32>,
@@ -212,5 +271,159 @@ impl Project {
         println!("[tsic] wrote {}", outpath.to_str().unwrap());
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::PathBuf;
+
+    use crate::{
+        config::Config,
+        project::Project,
+        section::{Section, TimeSignature},
+    };
+
+    const BPM_FACTOR: u32 = 30;
+    const MEASURES: u32 = 8;
+
+    fn build_test_project(num_sections: usize) -> Project {
+        let mut sections = vec![];
+
+        for i in 0..num_sections {
+            sections.push(Section {
+                bpm: (i as u32 + 1) * BPM_FACTOR,
+                time_signature: TimeSignature::default(),
+                measures: Some(MEASURES),
+            });
+        }
+        Project {
+            name: "TestProject".to_string(),
+            profile: Config::default(),
+            file_path: PathBuf::new(),
+            sections,
+        }
+    }
+
+    #[test]
+    fn append_to_project_no_values_first() {
+        let mut project = build_test_project(0);
+        let profile = Config::default();
+        project.append_section(None, None, None).unwrap();
+        let appended_section = project.get_section(0);
+        assert!(appended_section.is_some());
+        let appended_section = appended_section.unwrap();
+        assert_eq!(appended_section.bpm, profile.bpm);
+        assert_eq!(
+            appended_section.time_signature.to_string(),
+            TimeSignature::default().to_string()
+        );
+        assert!(appended_section.measures.is_none());
+    }
+    #[test]
+    fn append_to_project_no_values_takes_previous() {
+        let mut project = build_test_project(1);
+        project.append_section(None, None, None).unwrap();
+        let appended_section = project.get_section(1);
+        assert!(appended_section.is_some());
+        let appended_section = appended_section.unwrap();
+        assert_eq!(appended_section.bpm, BPM_FACTOR);
+        assert_eq!(
+            appended_section.time_signature.to_string(),
+            TimeSignature::default().to_string()
+        );
+        assert_eq!(appended_section.measures, None);
+    }
+
+    #[test]
+    fn append_to_project_with_values() {
+        let mut project = build_test_project(1);
+        let bpm = 220;
+        let time_signature = String::from("3/4");
+        project
+            .append_section(Some(bpm), Some(time_signature.clone()), Some(12))
+            .unwrap();
+        let appended_section = project.get_section(1);
+        assert!(appended_section.is_some());
+        let appended_section = appended_section.unwrap();
+        assert_eq!(appended_section.bpm, bpm);
+        assert_eq!(appended_section.time_signature.to_string(), time_signature);
+        assert_eq!(appended_section.measures, Some(12));
+    }
+    #[test]
+    fn append_to_project_fail_because_last_is_inifine() {
+        let mut project = build_test_project(0);
+        project.append_section(None, None, None).unwrap();
+        let result = project.append_section(None, None, Some(12));
+        assert!(result.is_err_and(|err|
+
+                    err == "[tsic] illegal operation. Section at index: 0 has no measurement. Appending a new section will have no effect",
+                ));
+    }
+
+    #[test]
+    fn insert_no_values() {
+        let mut project = build_test_project(12);
+        project
+            .insert_section_at(4, MEASURES + 4, None, None)
+            .unwrap();
+        let previous_section = project.get_section(3).unwrap();
+        let inserted_section = project.get_section(4);
+        assert!(inserted_section.is_some());
+        let inserted_section = inserted_section.unwrap();
+        assert_eq!(inserted_section.bpm, previous_section.bpm);
+        assert_eq!(
+            inserted_section.time_signature.to_string(),
+            previous_section.time_signature.to_string()
+        );
+        assert!(inserted_section.measures.unwrap() == MEASURES + 4);
+    }
+    #[test]
+    fn insert_all_values() {
+        let mut project = build_test_project(12);
+        let bpm = 150;
+        let ts = String::from("3/4");
+        project
+            .insert_section_at(8, MEASURES + 4, Some(bpm), Some(ts.clone()))
+            .unwrap();
+        let inserted_section = project.get_section(8);
+        assert!(inserted_section.is_some());
+        let inserted_section = inserted_section.unwrap();
+        assert_eq!(inserted_section.bpm, bpm);
+        assert_eq!(inserted_section.time_signature.to_string(), ts);
+        assert!(inserted_section.measures.unwrap() == MEASURES + 4);
+    }
+
+    #[test]
+    fn insert_to_append() {
+        let mut project = build_test_project(0);
+        let bpm = 150;
+        let ts = String::from("3/4");
+        project
+            .insert_section_at(12, MEASURES + 4, Some(bpm), Some(ts.clone()))
+            .unwrap();
+        let inserted_section = project.get_section(0);
+        assert!(inserted_section.is_some());
+        let inserted_section = inserted_section.unwrap();
+        assert_eq!(inserted_section.bpm, bpm);
+        assert_eq!(inserted_section.time_signature.to_string(), ts);
+        assert!(inserted_section.measures.unwrap() == MEASURES + 4);
+    }
+    #[test]
+    fn insert_at_zero() {
+        let mut project = build_test_project(12);
+        let profile = Config::default();
+        project
+            .insert_section_at(0, MEASURES + 4, None, None)
+            .unwrap();
+        let inserted_section = project.get_section(0);
+        assert!(inserted_section.is_some());
+        let inserted_section = inserted_section.unwrap();
+        assert_eq!(inserted_section.bpm, profile.bpm);
+        assert_eq!(
+            inserted_section.time_signature.to_string(),
+            TimeSignature::default().to_string()
+        );
+        assert!(inserted_section.measures.unwrap() == MEASURES + 4);
     }
 }

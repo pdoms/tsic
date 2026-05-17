@@ -20,10 +20,12 @@ TBD
 
 ## What's Next
 
-- [ ] insert sections with an index
+- [x] insert sections with an index
 - [ ] create midi file
 - [ ] play directly from binary
 - [ ] allow moving accent(s)
 - [ ] more choices for click sounds 
+- [ ] visualize in terminal???
+- [ ] non-quarter notes
 
 

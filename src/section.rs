@@ -3,6 +3,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 pub const MIN_IN_SEC: f64 = 60.0;
+pub const QUARTER_NOTE: f64 = 4.0; // bpm is defined as quarter notes per minutes
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Section {
@@ -13,9 +14,7 @@ pub struct Section {
 
 impl Section {
     pub fn beat_duration(&self) -> f64 {
-        MIN_IN_SEC
-            / self.bpm as f64
-            / (self.time_signature.beat_unit as f64 / self.time_signature.beats_per_bar as f64)
+        MIN_IN_SEC / self.bpm as f64 / (self.time_signature.beat_unit as f64 / QUARTER_NOTE)
     }
 }
 
