@@ -233,7 +233,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn to_wav(&self, outpath: &Path) -> Result<(), String> {
+    pub fn raw_buffer(&self) -> Result<Vec<i16>, String> {
         let total_duration: f64 = self
             .sections
             .iter()
@@ -283,6 +283,13 @@ impl Project {
         }
 
         println!("[tsic] prepared buffer");
+        Ok(buf.to_vec())
+
+
+    }
+
+    pub fn to_wav(&self, outpath: &Path) -> Result<(), String> {
+        let buf = self.raw_buffer()?;
 
         //TODO make this either part of the profile
         //or as args

@@ -22,7 +22,8 @@ TBD
 
 - [x] insert sections with an index
 - [X] create midi file
-- [ ] edit section
+- [X] edit section
+- [X] delete section
 - [ ] play directly from binary
 - [ ] visualize in terminal
 - [ ] allow moving accent(s)

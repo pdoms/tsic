@@ -4,16 +4,14 @@ mod midi;
 mod project;
 mod section;
 mod snd;
+mod play;
 
 use std::path::Path;
 
 use clap::Parser;
 
 use crate::{
-    args::Arguments,
-    config::{Config, PROFILE_DIR, PROJECTS_DIR, try_load_profile},
-    midi::MidiConfigs,
-    project::Project,
+    args::Arguments, config::{try_load_profile, Config, PROFILE_DIR, PROJECTS_DIR}, midi::MidiConfigs, play::play, project::Project
 };
 
 fn main() {
@@ -312,7 +310,29 @@ fn main() {
                 }
             }
         }
-        args::Cmd::Play { .. } => todo!(),
+        args::Cmd::Play { name } => {
+            let file_path = projects_path.join(format!("{name}.toml"));
+            match Project::from_disk(&file_path) {
+                Ok(project) => {
+                    match project.raw_buffer() {
+                        Ok(buffer) => {
+                            if let Err(err) = play(buffer, project.profile.sample_rate) {
+                                eprintln!("{err}");
+                                std::process::exit(1);
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!("{err}");
+                            std::process::exit(1);
+                        },
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 }
 
