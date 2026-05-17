@@ -93,7 +93,7 @@ pub enum Cmd {
         name: String,
         /// the index at which the section should be inserted
         #[arg(long, short)]
-        index: usize,
+        position: usize,
         /// Beats Per Minute
         #[arg(long, short)]
         bpm: Option<u32>,

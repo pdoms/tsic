@@ -154,6 +154,32 @@ fn main() {
                 }
             }
         }
+        args::Cmd::Insert {
+            name,
+            position,
+            bpm,
+            time_sig,
+            measures,
+        } => {
+            let file_path = projects_path.join(format!("{name}.toml"));
+            match Project::from_disk(&file_path) {
+                Ok(mut project) => {
+                    if let Err(err) = project.insert_section_at(position, measures, bpm, time_sig) {
+                        eprintln!("{err}");
+                        std::process::exit(1);
+                    }
+                    if let Err(err) = project.to_disk() {
+                        eprintln!("[tsic] - error writing project {name}: {err}");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    std::process::exit(1);
+                }
+            }
+        }
+
         args::Cmd::ProfilesList => list_entities(profiles_path, "profiles"),
         args::Cmd::ProjectsList => list_entities(projects_path, "projects"),
         args::Cmd::Project { name } => {
@@ -185,15 +211,8 @@ fn main() {
                 }
             }
         }
-        args::Cmd::Insert {
-            name,
-            index,
-            bpm,
-            time_sig,
-            measures,
-        } => todo!(),
-        args::Cmd::Midi { name, outfile } => todo!(),
-        args::Cmd::Play { name } => todo!(),
+        args::Cmd::Midi { .. } => todo!(),
+        args::Cmd::Play { .. } => todo!(),
     }
 }
 
