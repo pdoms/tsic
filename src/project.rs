@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::{Config, PROFILE_DIR, try_load_profile},
+    midi::{MidiConfigs, write_midi},
     section::{Section, TimeSignature},
     snd::click,
 };
@@ -271,6 +272,10 @@ impl Project {
         println!("[tsic] wrote {}", outpath.to_str().unwrap());
 
         Ok(())
+    }
+
+    pub fn to_midi(&self, midi_config: &MidiConfigs, path: &Path) -> Result<(), String> {
+        write_midi(&self.sections, midi_config, &self.profile, path)
     }
 }
 

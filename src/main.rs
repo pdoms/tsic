@@ -1,5 +1,6 @@
 mod args;
 mod config;
+mod midi;
 mod project;
 mod section;
 mod snd;
@@ -11,6 +12,7 @@ use clap::Parser;
 use crate::{
     args::Arguments,
     config::{Config, PROFILE_DIR, PROJECTS_DIR, try_load_profile},
+    midi::MidiConfigs,
     project::Project,
 };
 
@@ -211,7 +213,57 @@ fn main() {
                 }
             }
         }
-        args::Cmd::Midi { .. } => todo!(),
+        args::Cmd::Midi {
+            name,
+            outfile,
+            channel,
+            ticks_per_beat,
+            accent,
+            normal,
+            duration,
+            vel_accent,
+            vel_normal,
+        } => {
+            let file_path = projects_path.join(format!("{name}.toml"));
+            match Project::from_disk(&file_path) {
+                Ok(project) => {
+                    let file_name = outfile
+                        .unwrap_or(Path::new(format!("./{name}.mid").as_str()).to_path_buf());
+
+                    let mut midi_configs = MidiConfigs::default();
+                    if let Some(ch) = channel {
+                        midi_configs.channel(ch);
+                    }
+                    if let Some(tpb) = ticks_per_beat {
+                        midi_configs.ticks_per_beat(tpb);
+                    }
+                    if let Some(acc) = accent {
+                        midi_configs.note_accent(acc);
+                    }
+                    if let Some(nor) = normal {
+                        midi_configs.note_normal(nor);
+                    }
+                    if let Some(dur) = duration {
+                        midi_configs.duration(dur);
+                    }
+                    if let Some(vel_acc) = vel_accent {
+                        midi_configs.velocity_accent(vel_acc);
+                    }
+                    if let Some(vel_nor) = vel_normal {
+                        midi_configs.velocity_normal(vel_nor);
+                    }
+
+                    if let Err(err) = project.to_midi(&midi_configs, &file_name) {
+                        eprintln!("{err}");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    std::process::exit(1);
+                }
+            }
+        }
         args::Cmd::Play { .. } => todo!(),
     }
 }

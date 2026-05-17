@@ -1,1 +1,6 @@
 /target
+/profiles
+/projects
+*.wav
+*.mid
+

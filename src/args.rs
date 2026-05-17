@@ -106,15 +106,40 @@ pub enum Cmd {
     },
     /// writes the project to disk in the wav format.
     Wav {
+        /// name of the project
         name: String,
         /// provide path or name to outfile. Defaults to "./Wav.name.wav"
         outfile: Option<PathBuf>,
     },
     /// writes the project to disk in the midi format.
+    /// Midi defaults can be printed but not used in
+    /// a profile, so values are provided here
     Midi {
+        /// name of the project
         name: String,
         /// provide path or name to outfile. Defaults to "./Wav.name.wav"
         outfile: Option<PathBuf>,
+        /// midi channel (0-15 - zero-indexed)
+        #[arg(long, short)]
+        channel: Option<u8>,
+        /// ticks per beat (quarter note)
+        #[arg(long, short)]
+        ticks_per_beat: Option<u16>,
+        /// accent note
+        #[arg(long, short)]
+        accent: Option<u8>,
+        /// normal (click) note
+        #[arg(long, short)]
+        normal: Option<u8>,
+        /// how the note is held
+        #[arg(long, short)]
+        duration: Option<u32>,
+        /// velocity accent
+        #[arg(long)]
+        vel_accent: Option<u8>,
+        /// velocity normal
+        #[arg(long)]
+        vel_normal: Option<u8>,
     },
     Play {
         name: String,
