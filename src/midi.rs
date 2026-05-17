@@ -80,8 +80,7 @@ pub fn write_midi(
 ) -> Result<(), String> {
     let mut track: Track = vec![];
     let mut last_tick: u32 = 0;
-    #[allow(unused)]
-    let mut cursor_secs: f64 = 0.0;
+    //let mut cursor_secs: f64 = 0.0;
     let mut cursor_ticks: u32 = 0;
     let mut last_bpm: Option<u32> = None;
 
@@ -89,7 +88,7 @@ pub fn write_midi(
         let bpm = section.bpm as f64;
         let measures = section.measures.unwrap_or(profile.num_meassures_fallback);
         let time_sig = &section.time_signature;
-        let beat_dur_secs = section.beat_duration();
+        //let beat_dur_secs = section.beat_duration();
         let beat_dur_ticks = beat_duration_ticks(time_sig.beat_unit, midi_config.ticks_per_beat);
 
         if last_bpm != Some(section.bpm) {
@@ -137,7 +136,7 @@ pub fn write_midi(
                     },
                 });
                 last_tick = note_on_tick + midi_config.duration;
-                cursor_secs += beat_dur_secs;
+                //cursor_secs += beat_dur_secs;
             }
         }
         last_bpm = Some(section.bpm);
