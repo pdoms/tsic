@@ -26,9 +26,6 @@ TBD
 - [X] delete section
 - [x] play directly from binary
 - [x] visualize in terminal
-- [ ] simple keybinds in play [space: pause/resume, b: restart, x: stop playing and program]
-- [ ] allow moving accent(s)
-- [ ] more choices for click sounds 
-- [ ] non-quarter notes
-
+- [x] simple keybinds in play [space: pause/resume, q: quit]
+- [ ] tap bpm
 

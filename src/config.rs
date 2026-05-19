@@ -140,3 +140,4 @@ pub fn try_load_profile(profile_path: &Path, name: &str) -> Option<Config> {
     };
     None
 }
+
