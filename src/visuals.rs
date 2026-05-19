@@ -47,7 +47,11 @@ pub fn print_beat(event: &BeatEvent, next_event: Option<&BeatEvent>) {
     for i in 0..event.beats_per_bar {
         let ch = if i == 0 {
             'X'
-        } else if i <= event.beat { '+' } else { '.' };
+        } else if i <= event.beat {
+            '+'
+        } else {
+            '.'
+        };
         bar.push(ch);
         bar.push(' ');
     }
