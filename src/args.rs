@@ -58,9 +58,7 @@ pub enum Cmd {
     ProjectsList,
     /// Prints the project of the provided name to stdout.
     /// Note: the profile is not printed.
-    Project {
-        name: String,
-    },
+    Project { name: String },
     /// Creates a new project
     New {
         name: String,
@@ -165,5 +163,8 @@ pub enum Cmd {
     },
     Play {
         name: String,
+        /// whether to run visualization while playing
+        #[arg(long, short, default_value_t = false)]
+        visualize: bool,
     },
 }
