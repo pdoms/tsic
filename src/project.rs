@@ -10,6 +10,7 @@ use crate::{
     midi::{MidiConfigs, write_midi},
     section::{Section, TimeSignature},
     snd::click,
+    visuals::BeatEvent,
 };
 
 pub struct Project {
@@ -17,6 +18,8 @@ pub struct Project {
     pub profile: Config,
     pub file_path: PathBuf,
     pub sections: Vec<Section>,
+    pub events: Vec<BeatEvent>,
+    pub collect_events: bool,
 }
 
 impl Display for Project {
@@ -54,7 +57,13 @@ impl Project {
             profile,
             file_path: file_path.to_path_buf(),
             sections: vec![],
+            events: vec![],
+            collect_events: false,
         }
+    }
+
+    pub fn start_events(&mut self) {
+        self.collect_events = true;
     }
 
     #[cfg(test)]
@@ -212,6 +221,8 @@ impl Project {
             profile,
             file_path: file_path.to_path_buf(),
             sections: parsed.sections,
+            events: vec![],
+            collect_events: false,
         })
     }
     pub fn to_disk(&self) -> Result<(), String> {
@@ -233,7 +244,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn to_wav(&self, outpath: &Path) -> Result<(), String> {
+    pub fn raw_buffer(&mut self) -> Result<Vec<i16>, String> {
         let total_duration: f64 = self
             .sections
             .iter()
@@ -249,6 +260,7 @@ impl Project {
         let is_one = self.sections.len() == 1;
 
         let mut cursor = 0.0_f64;
+        let num_sections = self.sections.len();
 
         for (section_id, section) in self.sections.iter().enumerate() {
             let beat_duration = section.beat_duration();
@@ -261,7 +273,7 @@ impl Project {
                     "[tsic] this project has more than one section and section {section_id} has no number of measurements defined."
                 ));
             };
-            for _measure in 0..num_measures {
+            for measure in 0..num_measures {
                 for beat in 0..section.time_signature.beats_per_bar {
                     let sample_offset = (cursor * self.profile.sample_rate as f64) as usize;
                     let freq = if beat == 0 {
@@ -277,12 +289,33 @@ impl Project {
                         self.profile.sound.sound_duration_secs,
                         self.profile.sample_rate as f64,
                     );
+
+                    if self.collect_events {
+                        self.events.push(BeatEvent {
+                            time: cursor,
+                            beat,
+                            beats_per_bar: section.time_signature.beats_per_bar,
+                            measure,
+                            num_measures: section
+                                .measures
+                                .unwrap_or(self.profile.num_meassures_fallback),
+                            section_index: section_id,
+                            num_sections,
+                            bpm: section.bpm,
+                            time_sig: section.time_signature.clone(),
+                        });
+                    }
                     cursor += beat_duration;
                 }
             }
         }
 
         println!("[tsic] prepared buffer");
+        Ok(buf.to_vec())
+    }
+
+    pub fn write_wav(&mut self, outpath: &Path) -> Result<(), String> {
+        let buf = self.raw_buffer()?;
 
         //TODO make this either part of the profile
         //or as args
@@ -306,7 +339,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn to_midi(&self, midi_config: &MidiConfigs, path: &Path) -> Result<(), String> {
+    pub fn write_midi(&self, midi_config: &MidiConfigs, path: &Path) -> Result<(), String> {
         write_midi(&self.sections, midi_config, &self.profile, path)
     }
 }
@@ -339,6 +372,8 @@ mod test {
             profile: Config::default(),
             file_path: PathBuf::new(),
             sections,
+            events: vec![],
+            collect_events: false,
         }
     }
 

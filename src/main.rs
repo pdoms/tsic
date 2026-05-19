@@ -1,9 +1,11 @@
 mod args;
 mod config;
 mod midi;
+mod play;
 mod project;
 mod section;
 mod snd;
+mod visuals;
 
 use std::path::Path;
 
@@ -13,6 +15,7 @@ use crate::{
     args::Arguments,
     config::{Config, PROFILE_DIR, PROJECTS_DIR, try_load_profile},
     midi::MidiConfigs,
+    play::play,
     project::Project,
 };
 
@@ -247,10 +250,10 @@ fn main() {
         args::Cmd::Wav { name, outfile } => {
             let file_path = projects_path.join(format!("{name}.toml"));
             match Project::from_disk(&file_path) {
-                Ok(project) => {
+                Ok(mut project) => {
                     let file_name = outfile
                         .unwrap_or(Path::new(format!("./{name}.wav").as_str()).to_path_buf());
-                    if let Err(err) = project.to_wav(&file_name) {
+                    if let Err(err) = project.write_wav(&file_name) {
                         eprintln!("{err}");
                         std::process::exit(1);
                     }
@@ -301,7 +304,7 @@ fn main() {
                         midi_configs.velocity_normal(vel_nor);
                     }
 
-                    if let Err(err) = project.to_midi(&midi_configs, &file_name) {
+                    if let Err(err) = project.write_midi(&midi_configs, &file_name) {
                         eprintln!("{err}");
                         std::process::exit(1);
                     }
@@ -312,7 +315,35 @@ fn main() {
                 }
             }
         }
-        args::Cmd::Play { .. } => todo!(),
+        args::Cmd::Play { name, visualize } => {
+            let file_path = projects_path.join(format!("{name}.toml"));
+            match Project::from_disk(&file_path) {
+                Ok(mut project) => {
+                    if visualize {
+                        project.start_events();
+                    }
+
+                    match project.raw_buffer() {
+                        Ok(buffer) => {
+                            if let Err(err) =
+                                play(buffer, project.profile.sample_rate, project.events)
+                            {
+                                eprintln!("{err}");
+                                std::process::exit(1);
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!("{err}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 }
 
