@@ -65,10 +65,10 @@ pub fn tap_temp() -> Result<(), String> {
 
                     let now = Instant::now();
 
-                    if let Some(last) = tap_times.back() {
-                        if last.elapsed().as_secs_f64() > 3.0 {
-                            tap_times.clear();
-                        }
+                    if let Some(last) = tap_times.back()
+                        && last.elapsed().as_secs_f64() > 3.0
+                    {
+                        tap_times.clear();
                     }
 
                     if tap_times.len() == MAX_TAPS {
