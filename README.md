@@ -1,14 +1,21 @@
 # tsic
 
-A command line tool to configure metronome click tracks.
+A command line tool to configure metronome click tracks with changing time signatures (or not). Tap mode included, as well as small visual clues while playback runs. 
 
 ## Install
 
-TBD
+Download the latest binary for your platform from the [releases page](https://github.com/YOUR_USERNAME/tsic/releases/latest).
 
-## Quick Examples 
+| Platform | Binary |
+|----------|--------|
+| Linux    | `tsic` |
+| Windows  | `tsic.exe` |
 
-TBD
+Or, if you have the rust toochain [installed](https://rust-lang.org/tools/install/) fetch this repository and run:
+
+```console
+cargo build --release 
+```
 
 ## Profiles
 
@@ -18,14 +25,7 @@ TBD
 
 TBD
 
-## What's Next
+## Other Commands 
+TBD
 
-- [x] insert sections with an index
-- [X] create midi file
-- [X] edit section
-- [X] delete section
-- [x] play directly from binary
-- [x] visualize in terminal
-- [x] simple keybinds in play [space: pause/resume, q: quit]
-- [ ] tap bpm
 
