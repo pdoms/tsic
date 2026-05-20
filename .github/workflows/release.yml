@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        - os: ubuntu-latest
+          target: x86_64-unknown-linux-gnu
+          binary: tsic
+        - os: ubuntu-latest
+          target: x86_64-pc-windows-gnu
+          binary: tsic.exe
+
+    runs-on: ${{ matrix.ox }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses Swatinem/rust-cache@v2
+
+      - name: Install dependencies (Linux)
+        if: matrix.target == 'x86_64-unkown-linix-gnu'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      
+      - name: Install dependencies (Windows cross)
+        if matrix.target == 'x86_64-pc-windows-gnu'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev mingw-w64
+
+      - name: Buil
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}
+          path: target/${{ matrix.target }}/release/${{ matrix.binary }}
+  
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@4
+
+      - uses: actions/download-artifact@v4
+        with: 
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          body_path: CHANGELOG.md
+

@@ -26,9 +26,9 @@ pub fn print_beat(event: &BeatEvent, next_event: Option<&BeatEvent>) {
         } else {
             String::new()
         };
-        writeln!(
+        write!(
             out,
-            "\n[Section {}/{} | {}/{} | {} BPM]{}",
+            "\r\n[Section {}/{} | {}/{} | {} BPM]{}\r\n\r\n",
             event.section_index + 1,
             event.num_sections,
             event.time_sig.beats_per_bar,
@@ -37,8 +37,6 @@ pub fn print_beat(event: &BeatEvent, next_event: Option<&BeatEvent>) {
             next
         )
         .unwrap();
-        writeln!(out).unwrap();
-        writeln!(out).unwrap();
     }
 
     let mut bar = format!("  bar {}/{} | ", event.measure + 1, event.num_measures);
@@ -59,10 +57,8 @@ pub fn print_beat(event: &BeatEvent, next_event: Option<&BeatEvent>) {
     let caret_ch = '^';
     let caret_line = format!("{:width$}{}", "", caret_ch, width = caret_offset);
     write!(out, "\x1B[2A").unwrap(); // up 2 lines
-    write!(out, "\x1B[2K").unwrap(); // clear line
-    writeln!(out, "{}", bar).unwrap();
-    write!(out, "\x1B[2K").unwrap(); // clear line
-    writeln!(out, "{}", caret_line).unwrap();
+    write!(out, "\x1B[2K{}\r\n", bar).unwrap(); // clear line
+    write!(out, "\x1B[2K{}\r\n", caret_line).unwrap(); // clear line
 
     out.flush().unwrap();
 }
