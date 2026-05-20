@@ -167,4 +167,7 @@ pub enum Cmd {
         #[arg(long, short, default_value_t = false)]
         visualize: bool,
     },
+    /// Tab with the space bar a temp and display it in
+    /// the terminal
+    Tap,
 }

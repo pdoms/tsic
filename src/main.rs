@@ -5,6 +5,7 @@ mod play;
 mod project;
 mod section;
 mod snd;
+mod tap;
 mod visuals;
 
 use std::path::Path;
@@ -17,6 +18,7 @@ use crate::{
     midi::MidiConfigs,
     play::play,
     project::Project,
+    tap::tap_temp,
 };
 
 fn main() {
@@ -342,6 +344,12 @@ fn main() {
                     eprintln!("{err}");
                     std::process::exit(1);
                 }
+            }
+        }
+        args::Cmd::Tap => {
+            if let Err(err) = tap_temp() {
+                eprintln!("{err}");
+                std::process::exit(1);
             }
         }
     }
