@@ -16,8 +16,9 @@ use crate::{
     args::Arguments,
     config::{Config, PROFILE_DIR, PROJECTS_DIR, try_load_profile},
     midi::MidiConfigs,
-    play::play,
+    play::{play, play_simple},
     project::Project,
+    section::TimeSignature,
     tap::tap_temp,
 };
 
@@ -348,6 +349,51 @@ fn main() {
         }
         args::Cmd::Tap => {
             if let Err(err) = tap_temp() {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        }
+        args::Cmd::Metronome {
+            bpm,
+            signature,
+            profile,
+        } => {
+            let use_profile = if let Some(name) = profile {
+                // try loading it
+                let profile_path_current = profiles_path.join(format!("{name}.toml"));
+
+                let profile_exists = std::fs::exists(&profile_path_current).is_ok_and(|b| b);
+                if profile_exists {
+                    try_load_profile(&profile_path_current, name.as_str()).unwrap()
+                } else {
+                    eprintln!(
+                        "[tsic] error: profile name was provided, but the profile {} could not be found",
+                        profile_path_current.to_str().unwrap()
+                    );
+                    std::process::exit(1);
+                }
+            } else {
+                init_profile
+            };
+
+            let time_sig = if let Some(ts) = signature {
+                match TimeSignature::try_from(ts.as_str()) {
+                    Ok(ts) => ts,
+                    Err(err) => {
+                        eprintln!("{err}");
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                use_profile.get_time_signature()
+            };
+            let use_bpm = if let Some(bs) = bpm {
+                bs
+            } else {
+                use_profile.bpm
+            };
+
+            if let Err(err) = play_simple(use_bpm, time_sig, use_profile) {
                 eprintln!("{err}");
                 std::process::exit(1);
             }

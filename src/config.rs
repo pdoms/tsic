@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::section::TimeSignature;
+
 pub const DEFAULT_SAMPLE_RATE: u32 = 44100;
 pub const DEFAULT_BPM: u32 = 120;
 pub const DEFAULT_BEATS_PER_BAR: u32 = 4;
@@ -98,6 +100,13 @@ impl Config {
     }
     pub fn sound_envelope_decay_secs(&mut self, envelope_decay_secs: f64) {
         self.sound.envelope_decay_secs = envelope_decay_secs;
+    }
+
+    pub fn get_time_signature(&self) -> TimeSignature {
+        TimeSignature {
+            beats_per_bar: self.beats_per_bar,
+            beat_unit: self.beat_unit,
+        }
     }
 }
 

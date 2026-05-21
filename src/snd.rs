@@ -6,6 +6,10 @@ pub fn click(buf: &mut [i16], offset: usize, freq: f64, decay: f64, duration: f6
         let t = i as f64 / sr;
         let envelope = (-t / decay).exp();
         let sample = envelope * (2.0 * PI * freq * t).sin();
-        buf[offset + i] = (sample * i16::MAX as f64) as i16;
+        let idx = offset + i;
+        if idx >= buf.len() {
+            break;
+        }
+        buf[idx] = (sample * i16::MAX as f64) as i16;
     }
 }
