@@ -131,7 +131,7 @@ pub fn play_simple(bpm: u32, time_sig: TimeSignature, config: Config) -> Result<
         .map_err(|err| err.to_string())?;
     handle.log_on_drop(false);
 
-    let player = Player::connect_new(&handle.mixer());
+    let player = Player::connect_new(handle.mixer());
 
     let buf_f32: Vec<f32> = buf.iter().map(|s| *s as f32 / i16::MAX as f32).collect();
     player.append(SamplesBuffer::new(
