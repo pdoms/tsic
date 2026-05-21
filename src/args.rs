@@ -170,4 +170,17 @@ pub enum Cmd {
     /// Tab with the space bar a temp and display it in
     /// the terminal
     Tap,
+    /// Provide bpm, signature and a config and have the mentronome ticking away
+    Metronome {
+        /// the desired bpm
+        #[arg(short, long)]
+        bpm: Option<u32>,
+        /// time signature (e.g. 4/4) can be provided or taken from the a profile
+        #[arg(short, long)]
+        signature: Option<String>,
+        /// provide a profile as a template. If not provided, it falls back to
+        /// the default profile.
+        #[arg(short, long)]
+        profile: Option<String>,
+    },
 }

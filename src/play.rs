@@ -1,4 +1,5 @@
 use std::{
+    path::Path,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -7,10 +8,18 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossterm::terminal;
-use rodio::{ChannelCount, DeviceSinkBuilder, SampleRate, buffer::SamplesBuffer};
+use crossterm::{
+    event::{self, Event, KeyCode},
+    terminal,
+};
+use rodio::{ChannelCount, DeviceSinkBuilder, Player, SampleRate, buffer::SamplesBuffer};
 
-use crate::visuals::{BeatEvent, print_beat};
+use crate::{
+    config::Config,
+    project::Project,
+    section::{Section, TimeSignature},
+    visuals::{BeatEvent, print_beat},
+};
 
 pub fn play(buf: Vec<i16>, sample_rate: u32, events: Vec<BeatEvent>) -> Result<(), String> {
     println!("[tsic] controls: Pause/Resume with 'space' | Quit with 'q'");
@@ -102,5 +111,64 @@ pub fn play(buf: Vec<i16>, sample_rate: u32, events: Vec<BeatEvent>) -> Result<(
     }
     terminal::disable_raw_mode().map_err(|e| e.to_string())?;
 
+    Ok(())
+}
+
+pub fn play_simple(bpm: u32, time_sig: TimeSignature, config: Config) -> Result<(), String> {
+    let sample_rate = config.sample_rate;
+    let mut project = Project::new("", config, Path::new("."));
+    project.sections.push(Section {
+        bpm,
+        time_signature: time_sig,
+        measures: Some(512),
+    });
+    let buf = project.raw_buffer()?;
+
+    let mut handle = DeviceSinkBuilder::from_default_device()
+        .map_err(|err| err.to_string())?
+        .with_buffer_size(rodio::cpal::BufferSize::Fixed(256))
+        .open_stream()
+        .map_err(|err| err.to_string())?;
+    handle.log_on_drop(false);
+
+    let player = Player::connect_new(&handle.mixer());
+
+    let buf_f32: Vec<f32> = buf.iter().map(|s| *s as f32 / i16::MAX as f32).collect();
+    player.append(SamplesBuffer::new(
+        ChannelCount::new(1).unwrap(),
+        SampleRate::new(sample_rate).unwrap(),
+        buf_f32.clone(),
+    ));
+
+    terminal::enable_raw_mode().map_err(|err| err.to_string())?;
+
+    loop {
+        if player.empty() {
+            player.append(SamplesBuffer::new(
+                ChannelCount::new(1).unwrap(),
+                SampleRate::new(sample_rate).unwrap(),
+                buf_f32.clone(),
+            ));
+        }
+        if event::poll(Duration::from_millis(100)).map_err(|err| err.to_string())?
+            && let Event::Key(key) = event::read().map_err(|err| err.to_string())?
+        {
+            match key.code {
+                KeyCode::Char(' ') => {
+                    if player.is_paused() {
+                        player.play();
+                    } else {
+                        player.pause();
+                    }
+                }
+                KeyCode::Char('q') => {
+                    player.stop();
+                    break;
+                }
+                _ => {}
+            }
+        }
+    }
+    terminal::disable_raw_mode().map_err(|err| err.to_string())?;
     Ok(())
 }
