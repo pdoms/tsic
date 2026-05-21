@@ -103,7 +103,10 @@ impl Config {
     }
 
     pub fn get_time_signature(&self) -> TimeSignature {
-        TimeSignature { beats_per_bar: self.beats_per_bar, beat_unit: self.beat_unit }
+        TimeSignature {
+            beats_per_bar: self.beats_per_bar,
+            beat_unit: self.beat_unit,
+        }
     }
 }
 
