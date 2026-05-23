@@ -5,6 +5,7 @@ file_path = "./projects/test_project.toml"
 [[sections]]
 bpm = 180
 measures = 4
+name = "intro"
 
 [sections.time_signature]
 beats_per_bar = 4
@@ -13,6 +14,7 @@ beat_unit = 4
 [[sections]]
 bpm = 120
 measures = 2
+name = "mid section"
 
 [sections.time_signature]
 beats_per_bar = 4
@@ -21,6 +23,7 @@ beat_unit = 4
 [[sections]]
 bpm = 80
 measures = 4
+name = "last section"
 
 [sections.time_signature]
 beats_per_bar = 4

@@ -16,7 +16,7 @@ use crate::{
     args::Arguments,
     config::{Config, PROFILE_DIR, PROJECTS_DIR, try_load_profile},
     midi::MidiConfigs,
-    play::{play, play_simple},
+    play::play_simple,
     project::Project,
     section::TimeSignature,
     tap::tap_temp,
@@ -120,7 +120,6 @@ fn main() {
             }
         }
         args::Cmd::New { name, profile } => {
-            //TODO check if it exists!
             let use_profile = if &profile == "default" {
                 init_profile
             } else if let Some(prof) =
@@ -139,20 +138,22 @@ fn main() {
             }
         }
         args::Cmd::Append {
-            name,
+            project_name,
+            section_name,
             bpm,
             time_sig,
             measures,
         } => {
-            let file_path = projects_path.join(format!("{name}.toml"));
+            let file_path = projects_path.join(format!("{project_name}.toml"));
             match Project::from_disk(&file_path) {
                 Ok(mut project) => {
-                    if let Err(err) = project.append_section(bpm, time_sig, measures) {
+                    if let Err(err) = project.append_section(bpm, time_sig, measures, section_name)
+                    {
                         eprintln!("{err}");
                         std::process::exit(1);
                     }
                     if let Err(err) = project.to_disk() {
-                        eprintln!("[tsic] - error writing project {name}: {err}");
+                        eprintln!("[tsic] - error writing project {project_name}: {err}");
                         std::process::exit(1);
                     }
                 }
@@ -163,22 +164,25 @@ fn main() {
             }
         }
         args::Cmd::Insert {
-            name,
+            project_name,
             position,
             bpm,
             time_sig,
             measures,
+            section_name,
         } => {
-            let file_path = projects_path.join(format!("{name}.toml"));
+            let file_path = projects_path.join(format!("{project_name}.toml"));
             match Project::from_disk(&file_path) {
                 Ok(mut project) => {
-                    if let Err(err) = project.insert_section_at(position, measures, bpm, time_sig) {
+                    if let Err(err) =
+                        project.insert_section_at(position, measures, section_name, bpm, time_sig)
+                    {
                         eprintln!("{err}");
                         std::process::exit(1);
                     }
                     println!("[tsic] inserted section at position {position}");
                     if let Err(err) = project.to_disk() {
-                        eprintln!("[tsic] - error writing project {name}: {err}");
+                        eprintln!("[tsic] - error writing project {project_name}: {err}");
                         std::process::exit(1);
                     }
                 }
@@ -189,22 +193,38 @@ fn main() {
             }
         }
         args::Cmd::Edit {
-            name,
+            project_name,
             position,
+            name,
             bpm,
             time_sig,
             measures,
+            section_name,
         } => {
-            let file_path = projects_path.join(format!("{name}.toml"));
+            let file_path = projects_path.join(format!("{project_name}.toml"));
             match Project::from_disk(&file_path) {
                 Ok(mut project) => {
-                    if let Err(err) = project.edit_section(position, measures, bpm, time_sig) {
-                        eprintln!("{err}");
-                        std::process::exit(1);
+                    match project.edit_section(
+                        position,
+                        name,
+                        measures,
+                        bpm,
+                        time_sig,
+                        section_name,
+                    ) {
+                        Ok((idx, name)) => {
+                            println!(
+                                "[tsic] edited section at position {idx} {}",
+                                name.unwrap_or_default()
+                            );
+                        }
+                        Err(err) => {
+                            eprintln!("{err}");
+                            std::process::exit(1);
+                        }
                     }
-                    println!("[tsic] edited section at position {position}");
                     if let Err(err) = project.to_disk() {
-                        eprintln!("[tsic] - error writing project {name}: {err}");
+                        eprintln!("[tsic] - error writing project {project_name}: {err}");
                         std::process::exit(1);
                     }
                 }
@@ -214,19 +234,41 @@ fn main() {
                 }
             }
         }
-        args::Cmd::RemoveSection { name, position } => {
-            let file_path = projects_path.join(format!("{name}.toml"));
+        args::Cmd::RemoveSection {
+            project_name,
+            section_name,
+            position,
+        } => {
+            let file_path = projects_path.join(format!("{project_name}.toml"));
             match Project::from_disk(&file_path) {
                 Ok(mut project) => {
-                    if project.remove_section(position) {
-                        println!("[tsic] removed section from position {position}");
+                    let idx = if let Some(pos) = position {
+                        pos
+                    } else if let Some(n) = section_name {
+                        if let Some(idx) = project
+                            .sections
+                            .iter()
+                            .position(|s| s.name.as_ref().is_some_and(|nam| nam == &n))
+                        {
+                            idx
+                        } else {
+                            eprintln!("[tsic] error: section with name {n} not found.");
+                            std::process::exit(1);
+                        }
                     } else {
-                        println!(
-                            "[tsic] skipped removing section from position {position} (out of bounds)"
+                        eprintln!(
+                            "[tsic] error: either position or name must be provided in order to remove a section"
                         );
+                        std::process::exit(1);
+                    };
+
+                    if project.remove_section(idx) {
+                        println!("[tsic] removed section");
+                    } else {
+                        println!("[tsic] skipped removing section (out of bounds)");
                     }
                     if let Err(err) = project.to_disk() {
-                        eprintln!("[tsic] - error writing project {name}: {err}");
+                        eprintln!("[tsic] - error writing project {project}: {err}");
                         std::process::exit(1);
                     }
                 }
@@ -250,12 +292,16 @@ fn main() {
                 }
             }
         }
-        args::Cmd::Wav { name, outfile } => {
-            let file_path = projects_path.join(format!("{name}.toml"));
+        args::Cmd::Wav {
+            project_name,
+            outfile,
+        } => {
+            let file_path = projects_path.join(format!("{project_name}.toml"));
             match Project::from_disk(&file_path) {
                 Ok(mut project) => {
-                    let file_name = outfile
-                        .unwrap_or(Path::new(format!("./{name}.wav").as_str()).to_path_buf());
+                    let file_name = outfile.unwrap_or(
+                        Path::new(format!("./{project_name}.wav").as_str()).to_path_buf(),
+                    );
                     if let Err(err) = project.write_wav(&file_name) {
                         eprintln!("{err}");
                         std::process::exit(1);
@@ -268,7 +314,7 @@ fn main() {
             }
         }
         args::Cmd::Midi {
-            name,
+            project_name,
             outfile,
             channel,
             ticks_per_beat,
@@ -278,11 +324,12 @@ fn main() {
             vel_accent,
             vel_normal,
         } => {
-            let file_path = projects_path.join(format!("{name}.toml"));
+            let file_path = projects_path.join(format!("{project_name}.toml"));
             match Project::from_disk(&file_path) {
                 Ok(project) => {
-                    let file_name = outfile
-                        .unwrap_or(Path::new(format!("./{name}.mid").as_str()).to_path_buf());
+                    let file_name = outfile.unwrap_or(
+                        Path::new(format!("./{project_name}.mid").as_str()).to_path_buf(),
+                    );
 
                     let mut midi_configs = MidiConfigs::default();
                     if let Some(ch) = channel {
@@ -318,27 +365,16 @@ fn main() {
                 }
             }
         }
-        args::Cmd::Play { name, visualize } => {
-            let file_path = projects_path.join(format!("{name}.toml"));
+        args::Cmd::Play {
+            project_name,
+            visualize,
+        } => {
+            let file_path = projects_path.join(format!("{project_name}.toml"));
             match Project::from_disk(&file_path) {
-                Ok(mut project) => {
-                    if visualize {
-                        project.start_events();
-                    }
-
-                    match project.raw_buffer() {
-                        Ok(buffer) => {
-                            if let Err(err) =
-                                play(buffer, project.profile.sample_rate, project.events)
-                            {
-                                eprintln!("{err}");
-                                std::process::exit(1);
-                            }
-                        }
-                        Err(err) => {
-                            eprintln!("{err}");
-                            std::process::exit(1);
-                        }
+                Ok(project) => {
+                    if let Err(err) = project.play(visualize) {
+                        eprintln!("{err}");
+                        std::process::exit(1);
                     }
                 }
                 Err(err) => {
