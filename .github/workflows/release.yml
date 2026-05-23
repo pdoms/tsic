@@ -9,15 +9,14 @@ jobs:
   build:
     strategy:
       matrix:
-        - os: ubuntu-latest
-          target: x86_64-unknown-linux-gnu
-          binary: tsic
-        - os: ubuntu-latest
-          target: x86_64-pc-windows-gnu
-          binary: tsic.exe
-
-    runs-on: ${{ matrix.ox }}
-
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: tsic
+          - os: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            binary: tsic.exe
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,17 +24,17 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - uses Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies (Linux)
-        if: matrix.target == 'x86_64-unkown-linix-gnu'
+        if: matrix.target == 'x86_64-unkown-linux-gnu'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       
       - name: Install dependencies (Windows cross)
-        if matrix.target == 'x86_64-pc-windows-gnu'
+        if: matrix.target == 'x86_64-pc-windows-gnu'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev mingw-w64
 
-      - name: Buil
+      - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload binary
@@ -51,7 +50,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@4
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with: 
