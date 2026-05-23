@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     config::{Config, PROFILE_DIR, try_load_profile},
     midi::{MidiConfigs, write_midi},
+    play::play,
     section::{Section, TimeSignature},
     snd::click,
     visuals::BeatEvent,
@@ -18,8 +19,6 @@ pub struct Project {
     pub profile: Config,
     pub file_path: PathBuf,
     pub sections: Vec<Section>,
-    pub events: Vec<BeatEvent>,
-    pub collect_events: bool,
 }
 
 impl Display for Project {
@@ -32,7 +31,12 @@ impl Display for Project {
         for (i, section) in self.sections.iter().enumerate() {
             writeln!(
                 f,
-                "  [{i}] bpm: {}; time_signature: {}, measures: {}",
+                "  [{i}{}] bpm: {}; time_signature: {}, measures: {}",
+                if let Some(name) = section.name.as_ref() {
+                    format!("|{name}")
+                } else {
+                    String::new()
+                },
                 section.bpm,
                 section.time_signature,
                 section.measures.map(|v| v as i32).unwrap_or(-1)
@@ -57,13 +61,7 @@ impl Project {
             profile,
             file_path: file_path.to_path_buf(),
             sections: vec![],
-            events: vec![],
-            collect_events: false,
         }
-    }
-
-    pub fn start_events(&mut self) {
-        self.collect_events = true;
     }
 
     #[cfg(test)]
@@ -73,14 +71,35 @@ impl Project {
 
     pub fn edit_section(
         &mut self,
-        position: usize,
+        position: Option<usize>,
+        name: Option<String>,
         measures: Option<u32>,
         bpm: Option<u32>,
         time_sig: Option<String>,
-    ) -> Result<(), String> {
-        let section = self.sections.get_mut(position).ok_or(format!(
-            "[tsic] could not get section at position {position}"
-        ))?;
+        section_name: Option<String>,
+    ) -> Result<(usize, Option<String>), String> {
+        let idx = if let Some(pos) = position {
+            pos
+        } else if let Some(n) = name {
+            if let Some(idx) = self
+                .sections
+                .iter()
+                .position(|s| s.name.as_ref().is_some_and(|nam| nam == &n))
+            {
+                idx
+            } else {
+                return Err(format!("[tsic] error: section with name {n} not found."));
+            }
+        } else {
+            return Err(String::from(
+                "[tsic] error: either position or name must be provided in order
+                    to edit a section",
+            ));
+        };
+        let section = self
+            .sections
+            .get_mut(idx)
+            .ok_or(format!("[tsic] could not get section at position {idx}"))?;
 
         if measures.is_some() {
             section.measures(measures);
@@ -91,7 +110,10 @@ impl Project {
         if let Some(ts) = time_sig {
             section.time_signature_str(&ts)?;
         }
-        Ok(())
+        if let Some(nomen) = section_name {
+            section.name(nomen);
+        }
+        Ok((idx, section.name.clone()))
     }
 
     pub fn remove_section(&mut self, position: usize) -> bool {
@@ -112,6 +134,7 @@ impl Project {
         &mut self,
         position: usize,
         measures: u32,
+        section_name: Option<String>,
         bpm: Option<u32>,
         time_sig: Option<String>,
     ) -> Result<(), String> {
@@ -119,7 +142,7 @@ impl Project {
         // append
         if position >= self.sections.len() {
             println!("[tsic] warning: position out of bounds - will append instead");
-            return self.append_section(bpm, time_sig, Some(measures));
+            return self.append_section(bpm, time_sig, Some(measures), section_name);
         }
 
         let section = if position == 0 {
@@ -134,6 +157,7 @@ impl Project {
                 }
             };
             Section {
+                name: section_name,
                 bpm: bpm.unwrap_or(self.profile.bpm),
                 time_signature,
                 measures: Some(measures),
@@ -146,6 +170,7 @@ impl Project {
                 prev.time_signature.clone()
             };
             Section {
+                name: section_name,
                 bpm: bpm.unwrap_or(prev.bpm),
                 time_signature,
                 measures: Some(measures),
@@ -162,6 +187,7 @@ impl Project {
         bpm: Option<u32>,
         time_sig: Option<String>,
         measures: Option<u32>,
+        section_name: Option<String>,
     ) -> Result<(), String> {
         let section = if let Some(last) = self.sections.last() {
             if last.measures.is_none() {
@@ -176,6 +202,7 @@ impl Project {
                 last.time_signature.clone()
             };
             Section {
+                name: section_name,
                 bpm: bpm.unwrap_or(last.bpm),
                 time_signature,
                 measures,
@@ -193,6 +220,7 @@ impl Project {
                 bpm: bpm.unwrap_or(self.profile.bpm),
                 time_signature,
                 measures,
+                name: section_name,
             }
         };
         self.sections.push(section);
@@ -202,6 +230,23 @@ impl Project {
         );
 
         Ok(())
+    }
+
+    pub fn play(&self, visualize: bool) -> Result<(), String> {
+        let num_sections = self.sections.len();
+        let beat_events: Vec<Vec<BeatEvent>> = if visualize {
+            self.sections
+                .iter()
+                .enumerate()
+                .map(|(id, section)| {
+                    section.get_beat_events_with_measures(id, num_sections, &self.profile)
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        play(&self.sections, &beat_events, &self.profile)
     }
 
     pub fn from_disk(file_path: &Path) -> Result<Self, String> {
@@ -221,8 +266,6 @@ impl Project {
             profile,
             file_path: file_path.to_path_buf(),
             sections: parsed.sections,
-            events: vec![],
-            collect_events: false,
         })
     }
     pub fn to_disk(&self) -> Result<(), String> {
@@ -244,15 +287,12 @@ impl Project {
         Ok(())
     }
 
+    /// use this for wav rendering
     pub fn raw_buffer(&mut self) -> Result<Vec<i16>, String> {
         let total_duration: f64 = self
             .sections
             .iter()
-            .map(|section| {
-                let beat_duration = section.beat_duration();
-                let measure_duration = beat_duration * section.time_signature.beats_per_bar as f64;
-                measure_duration * section.measures.unwrap_or(1) as f64
-            })
+            .map(|section| section.duration_secs())
             .sum();
         let buf_size = (total_duration * self.profile.sample_rate as f64) as usize;
         let mut buf = vec![0i16; buf_size];
@@ -260,7 +300,6 @@ impl Project {
         let is_one = self.sections.len() == 1;
 
         let mut cursor = 0.0_f64;
-        let num_sections = self.sections.len();
 
         for (section_id, section) in self.sections.iter().enumerate() {
             let beat_duration = section.beat_duration();
@@ -273,7 +312,7 @@ impl Project {
                     "[tsic] this project has more than one section and section {section_id} has no number of measurements defined."
                 ));
             };
-            for measure in 0..num_measures {
+            for _ in 0..num_measures {
                 for beat in 0..section.time_signature.beats_per_bar {
                     let sample_offset = (cursor * self.profile.sample_rate as f64) as usize;
                     let freq = if beat == 0 {
@@ -289,22 +328,6 @@ impl Project {
                         self.profile.sound.sound_duration_secs,
                         self.profile.sample_rate as f64,
                     );
-
-                    if self.collect_events {
-                        self.events.push(BeatEvent {
-                            time: cursor,
-                            beat,
-                            beats_per_bar: section.time_signature.beats_per_bar,
-                            measure,
-                            num_measures: section
-                                .measures
-                                .unwrap_or(self.profile.num_meassures_fallback),
-                            section_index: section_id,
-                            num_sections,
-                            bpm: section.bpm,
-                            time_sig: section.time_signature.clone(),
-                        });
-                    }
                     cursor += beat_duration;
                 }
             }
@@ -362,6 +385,7 @@ mod test {
 
         for i in 0..num_sections {
             sections.push(Section {
+                name: None,
                 bpm: (i as u32 + 1) * BPM_FACTOR,
                 time_signature: TimeSignature::default(),
                 measures: Some(MEASURES),
@@ -372,8 +396,6 @@ mod test {
             profile: Config::default(),
             file_path: PathBuf::new(),
             sections,
-            events: vec![],
-            collect_events: false,
         }
     }
 
@@ -381,7 +403,7 @@ mod test {
     fn append_to_project_no_values_first() {
         let mut project = build_test_project(0);
         let profile = Config::default();
-        project.append_section(None, None, None).unwrap();
+        project.append_section(None, None, None, None).unwrap();
         let appended_section = project.get_section(0);
         assert!(appended_section.is_some());
         let appended_section = appended_section.unwrap();
@@ -395,7 +417,7 @@ mod test {
     #[test]
     fn append_to_project_no_values_takes_previous() {
         let mut project = build_test_project(1);
-        project.append_section(None, None, None).unwrap();
+        project.append_section(None, None, None, None).unwrap();
         let appended_section = project.get_section(1);
         assert!(appended_section.is_some());
         let appended_section = appended_section.unwrap();
@@ -412,8 +434,14 @@ mod test {
         let mut project = build_test_project(1);
         let bpm = 220;
         let time_signature = String::from("3/4");
+        let section_name = String::from("Test Section");
         project
-            .append_section(Some(bpm), Some(time_signature.clone()), Some(12))
+            .append_section(
+                Some(bpm),
+                Some(time_signature.clone()),
+                Some(12),
+                Some(section_name.clone()),
+            )
             .unwrap();
         let appended_section = project.get_section(1);
         assert!(appended_section.is_some());
@@ -421,12 +449,13 @@ mod test {
         assert_eq!(appended_section.bpm, bpm);
         assert_eq!(appended_section.time_signature.to_string(), time_signature);
         assert_eq!(appended_section.measures, Some(12));
+        assert_eq!(appended_section.name, Some(section_name));
     }
     #[test]
     fn append_to_project_fail_because_last_is_inifine() {
         let mut project = build_test_project(0);
-        project.append_section(None, None, None).unwrap();
-        let result = project.append_section(None, None, Some(12));
+        project.append_section(None, None, None, None).unwrap();
+        let result = project.append_section(None, None, Some(12), None);
         assert!(result.is_err_and(|err|
 
                     err == "[tsic] illegal operation. Section at index: 0 has no measurement. Appending a new section will have no effect",
@@ -437,7 +466,7 @@ mod test {
     fn insert_no_values() {
         let mut project = build_test_project(12);
         project
-            .insert_section_at(4, MEASURES + 4, None, None)
+            .insert_section_at(4, MEASURES + 4, None, None, None)
             .unwrap();
         let previous_section = project.get_section(3).unwrap();
         let inserted_section = project.get_section(4);
@@ -455,8 +484,15 @@ mod test {
         let mut project = build_test_project(12);
         let bpm = 150;
         let ts = String::from("3/4");
+        let section_name = String::from("Test Section");
         project
-            .insert_section_at(8, MEASURES + 4, Some(bpm), Some(ts.clone()))
+            .insert_section_at(
+                8,
+                MEASURES + 4,
+                Some(section_name.clone()),
+                Some(bpm),
+                Some(ts.clone()),
+            )
             .unwrap();
         let inserted_section = project.get_section(8);
         assert!(inserted_section.is_some());
@@ -472,7 +508,7 @@ mod test {
         let bpm = 150;
         let ts = String::from("3/4");
         project
-            .insert_section_at(12, MEASURES + 4, Some(bpm), Some(ts.clone()))
+            .insert_section_at(12, MEASURES + 4, None, Some(bpm), Some(ts.clone()))
             .unwrap();
         let inserted_section = project.get_section(0);
         assert!(inserted_section.is_some());
@@ -486,7 +522,7 @@ mod test {
         let mut project = build_test_project(12);
         let profile = Config::default();
         project
-            .insert_section_at(0, MEASURES + 4, None, None)
+            .insert_section_at(0, MEASURES + 4, None, None, None)
             .unwrap();
         let inserted_section = project.get_section(0);
         assert!(inserted_section.is_some());

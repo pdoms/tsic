@@ -1,10 +1,7 @@
+use std::sync::mpsc::Sender;
 use std::{
     path::Path,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread,
+    sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
 
@@ -12,7 +9,10 @@ use crossterm::{
     event::{self, Event, KeyCode},
     terminal,
 };
-use rodio::{ChannelCount, DeviceSinkBuilder, Player, SampleRate, buffer::SamplesBuffer};
+use rodio::{
+    ChannelCount, DeviceSinkBuilder, Player, SampleRate, Source, buffer::SamplesBuffer,
+    cpal::BufferSize,
+};
 
 use crate::{
     config::Config,
@@ -21,96 +21,251 @@ use crate::{
     visuals::{BeatEvent, print_beat},
 };
 
-pub fn play(buf: Vec<i16>, sample_rate: u32, events: Vec<BeatEvent>) -> Result<(), String> {
-    println!("[tsic] controls: Pause/Resume with 'space' | Quit with 'q'");
+const BUFFER_SIZE: u32 = 256;
 
-    let mut handle = DeviceSinkBuilder::open_default_sink().map_err(|e| e.to_string())?;
+const KEY_TOGGLE_PAUSE: char = ' ';
+const KEY_QUIT: char = 'q';
+const KEY_NEXT: char = 'n';
+const KEY_PREVIOUS: char = 'p';
+const KEY_SECTION_START: char = 's';
+const KEY_TRACK_START: char = 'b';
+
+const KEYBINDS: [(&str, &str); 6] = [
+    ("SPACE", "toggle pause/resume"),
+    ("q", "quit"),
+    ("n", "go to and start next section"),
+    ("p", "go to and start previous section"),
+    ("s", "got to beginning of current section"),
+    ("b", "got to beginning of the track"),
+];
+
+fn print_key_binds() {
+    println!("[tsic] Key bindings:\n");
+    for (key, explain) in KEYBINDS {
+        println!("       >> {:width$} -> {}", key, explain, width = 8);
+    }
+}
+
+struct SectionSource {
+    inner: SamplesBuffer,
+    done_tx: Sender<usize>,
+    section_index: usize,
+    sent: bool,
+}
+
+impl SectionSource {
+    fn new(buf: Vec<f32>, sample_rate: u32, done_tx: Sender<usize>, section_index: usize) -> Self {
+        Self {
+            inner: SamplesBuffer::new(
+                ChannelCount::new(1).unwrap(),
+                SampleRate::new(sample_rate).unwrap(),
+                buf,
+            ),
+            done_tx,
+            section_index,
+            sent: false,
+        }
+    }
+}
+
+impl Iterator for SectionSource {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let sample = self.inner.next();
+        if sample.is_none() && !self.sent {
+            self.done_tx.send(self.section_index).ok();
+            self.sent = true;
+        }
+        sample
+    }
+}
+
+impl Source for SectionSource {
+    fn current_span_len(&self) -> Option<usize> {
+        self.inner.current_span_len()
+    }
+
+    fn channels(&self) -> ChannelCount {
+        self.inner.channels()
+    }
+
+    fn sample_rate(&self) -> SampleRate {
+        self.inner.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
+}
+
+pub fn play(
+    sections: &[Section],
+    beat_events: &[Vec<BeatEvent>],
+    config: &Config,
+) -> Result<(), String> {
+    print_key_binds();
+    println!("\n[tsic] Hit SPACE to start");
+
+    let mut handle = DeviceSinkBuilder::from_default_device()
+        .map_err(|err| err.to_string())?
+        .with_buffer_size(BufferSize::Fixed(BUFFER_SIZE))
+        .open_stream()
+        .map_err(|err| err.to_string())?;
+
     handle.log_on_drop(false);
-    let player = rodio::Player::connect_new(handle.mixer());
-    let source = SamplesBuffer::new(
-        ChannelCount::new(1u16).unwrap(),
-        SampleRate::new(sample_rate).unwrap(),
-        buf.iter()
-            .map(|s| *s as f32 / i16::MAX as f32)
-            .collect::<Vec<f32>>(),
-    );
-    player.append(source);
+    let player = Player::connect_new(handle.mixer());
+    player.pause();
 
-    let pause_offset = Arc::new(Mutex::new(0.0_f64));
-    let pause_offset_visual = Arc::clone(&pause_offset);
-    let pause_start = Arc::new(Mutex::new(None::<Instant>));
-    let stop = Arc::new(AtomicBool::new(false));
-    let stop_visual = Arc::clone(&stop);
-    let paused = Arc::new(AtomicBool::new(false));
-    let paused_visual = Arc::clone(&paused);
+    let (done_tx, done_rx): (Sender<usize>, Receiver<usize>) = mpsc::channel();
 
-    let visual_handle = if !events.is_empty() {
-        let start = Instant::now();
+    let num_sections = sections.len();
+    let mut current = 0;
 
-        Some(thread::spawn(move || {
-            for (i, event) in events.iter().enumerate() {
-                loop {
-                    if stop_visual.load(Ordering::Relaxed) {
-                        return;
-                    }
-                    if !paused_visual.load(Ordering::Relaxed) {
-                        let elapsed =
-                            start.elapsed().as_secs_f64() - *pause_offset_visual.lock().unwrap();
-                        let wait = event.time - elapsed;
-                        if wait <= 0.0 {
-                            break;
-                        }
-                    }
-                }
-                if stop_visual.load(Ordering::Relaxed) {
-                    return;
-                }
-                print_beat(event, events.get(i + 1));
-            }
-        }))
-    } else {
-        None
-    };
+    let buf = sections[current].render_with_measures_f32(config);
+    player.append(SectionSource::new(
+        buf,
+        config.sample_rate,
+        done_tx.clone(),
+        current,
+    ));
 
-    // input thread
-    terminal::enable_raw_mode().map_err(|e| e.to_string())?;
+    let mut event_idx = 0;
+    let mut section_start = Instant::now();
+    let mut pause_offset = 0.0_f64;
+    let mut pause_start: Option<Instant> = Some(Instant::now());
+
+    terminal::enable_raw_mode().map_err(|err| err.to_string())?;
+
     loop {
-        if crossterm::event::poll(Duration::from_millis(100)).map_err(|e| e.to_string())?
-            && let crossterm::event::Event::Key(key) =
-                crossterm::event::read().map_err(|e| e.to_string())?
+        if !player.is_paused()
+            && !beat_events.is_empty()
+            && let Some(event) = beat_events[current].get(event_idx)
+        {
+            let elapsed = section_start.elapsed().as_secs_f64() - pause_offset;
+            if elapsed >= event.time {
+                //for event in &beat_events[0] {
+                //    eprintln!("beat {} measure {} time {:.3}", event.beat, event.measure, event.time);
+                //}
+                //                    eprintln!("beat {} measure {} time {:.3} elapsed {:.3}",
+                //                        event.beat, event.measure, event.time, elapsed
+                //                        );
+                let next_section_event = if current + 1 < num_sections {
+                    beat_events[current + 1].first()
+                } else {
+                    None
+                };
+                print_beat(event, next_section_event);
+                event_idx += 1;
+            }
+        }
+        if done_rx.try_recv().is_ok() && current + 1 < num_sections {
+            current += 1;
+            let buf = sections[current].render_with_measures_f32(config);
+            player.append(SectionSource::new(
+                buf,
+                config.sample_rate,
+                done_tx.clone(),
+                current,
+            ));
+            event_idx = 0;
+            section_start = Instant::now();
+            pause_offset = 0.0;
+            pause_start = None;
+        }
+
+        if event::poll(Duration::from_millis(10)).map_err(|err| err.to_string())?
+            && let Event::Key(key) = event::read().map_err(|err| err.to_string())?
         {
             match key.code {
-                crossterm::event::KeyCode::Char(' ') => {
+                KeyCode::Char(KEY_TOGGLE_PAUSE) => {
+                    // toggle pause/play
                     if player.is_paused() {
-                        if let Some(ps) = pause_start.lock().unwrap().take() {
-                            *pause_offset.lock().unwrap() += ps.elapsed().as_secs_f64();
+                        if let Some(ps) = pause_start.take() {
+                            pause_offset += ps.elapsed().as_secs_f64();
                         }
                         player.play();
-                        paused.store(false, Ordering::Relaxed);
                     } else {
-                        *pause_start.lock().unwrap() = Some(Instant::now());
+                        pause_start = Some(Instant::now());
                         player.pause();
-                        paused.store(true, Ordering::Relaxed);
                     }
                 }
-                crossterm::event::KeyCode::Char('q') => {
+                KeyCode::Char(KEY_NEXT) if current + 1 < num_sections => {
+                    // go to next section
+                    current += 1;
+                    player.stop();
+                    let buf = sections[current].render_with_measures_f32(config);
+                    player.append(SectionSource::new(
+                        buf,
+                        config.sample_rate,
+                        done_tx.clone(),
+                        current,
+                    ));
+                    event_idx = 0;
+                    section_start = Instant::now();
+                    pause_offset = 0.0;
+                    pause_start = None;
+                }
+                KeyCode::Char(KEY_PREVIOUS) => {
+                    // go to previous section
+                    current = current.saturating_sub(1);
+                    player.stop();
+                    let buf = sections[current].render_with_measures_f32(config);
+                    player.append(SectionSource::new(
+                        buf,
+                        config.sample_rate,
+                        done_tx.clone(),
+                        current,
+                    ));
+                    event_idx = 0;
+                    section_start = Instant::now();
+                    pause_offset = 0.0;
+                    pause_start = None;
+                }
+                KeyCode::Char(KEY_SECTION_START) => {
+                    // go to start of current section
+                    player.stop();
+                    let buf = sections[current].render_with_measures_f32(config);
+                    player.append(SectionSource::new(
+                        buf,
+                        config.sample_rate,
+                        done_tx.clone(),
+                        current,
+                    ));
+                    event_idx = 0;
+                    section_start = Instant::now();
+                    pause_offset = 0.0;
+                    pause_start = None;
+                }
+                KeyCode::Char(KEY_TRACK_START) => {
+                    // go to track start
+                    current = 0;
+                    player.stop();
+                    let buf = sections[current].render_with_measures_f32(config);
+                    player.append(SectionSource::new(
+                        buf,
+                        config.sample_rate,
+                        done_tx.clone(),
+                        current,
+                    ));
+                    event_idx = 0;
+                    section_start = Instant::now();
+                    pause_offset = 0.0;
+                    pause_start = None;
+                }
+                KeyCode::Char(KEY_QUIT) => {
                     player.stop();
                     break;
                 }
                 _ => {}
             }
         }
-        if player.empty() {
+        if player.empty() && current == num_sections - 1 {
             break;
         }
     }
 
-    stop.store(true, Ordering::Relaxed);
-    if let Some(handle) = visual_handle {
-        handle.join().unwrap();
-    }
-    terminal::disable_raw_mode().map_err(|e| e.to_string())?;
-
+    terminal::disable_raw_mode().map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -118,6 +273,7 @@ pub fn play_simple(bpm: u32, time_sig: TimeSignature, config: Config) -> Result<
     let sample_rate = config.sample_rate;
     let mut project = Project::new("", config, Path::new("."));
     project.sections.push(Section {
+        name: None,
         bpm,
         time_signature: time_sig,
         measures: Some(512),
@@ -126,7 +282,7 @@ pub fn play_simple(bpm: u32, time_sig: TimeSignature, config: Config) -> Result<
 
     let mut handle = DeviceSinkBuilder::from_default_device()
         .map_err(|err| err.to_string())?
-        .with_buffer_size(rodio::cpal::BufferSize::Fixed(256))
+        .with_buffer_size(BufferSize::Fixed(256))
         .open_stream()
         .map_err(|err| err.to_string())?;
     handle.log_on_drop(false);

@@ -65,12 +65,16 @@ pub enum Cmd {
         #[arg(short, long, default_value_t = String::from("default"))]
         profile: String,
     },
-    /// append a section to the current project.
+    /// Append a section to the current project.
     /// Except for <measures>, omitted values are taken from the previous
     /// section. If there is  no previous
     /// section, it defaults to profile values
     Append {
-        name: String,
+        /// name of the profile
+        project_name: String,
+        /// name of the section
+        #[arg(long, short)]
+        section_name: Option<String>,
         /// Beats Per Minute
         #[arg(long, short)]
         bpm: Option<u32>,
@@ -83,12 +87,13 @@ pub enum Cmd {
         #[arg(long, short)]
         measures: Option<u32>,
     },
-    /// insert a section at the provided index.
+    /// Insert a section at the provided index.
     /// Omitted values are taken from the previous
     /// section. If there is  no previous
     /// section it defaults to profile defaults.
     Insert {
-        name: String,
+        /// name of the project to load
+        project_name: String,
         /// the index at which the section should be inserted
         #[arg(long, short)]
         position: usize,
@@ -101,13 +106,20 @@ pub enum Cmd {
         /// Number of Measures this section has
         #[arg(long, short)]
         measures: u32,
+        /// A name for the section
+        #[arg(long, short)]
+        section_name: Option<String>,
     },
     /// Edit a section
     Edit {
-        name: String,
-        /// the index/position of the section to be edited
+        /// name of the project
+        project_name: String,
+        /// the index/position of the section to be edited (either name or position is required)
         #[arg(long, short)]
-        position: usize,
+        position: Option<usize>,
+        /// name of the section (either name or position is required)
+        #[arg(long, short)]
+        name: Option<String>,
         /// Beats Per Minute
         #[arg(long, short)]
         bpm: Option<u32>,
@@ -117,26 +129,33 @@ pub enum Cmd {
         /// Number of Measures this section has
         #[arg(long, short)]
         measures: Option<u32>,
+        /// A new name for the section
+        #[arg(long)]
+        section_name: Option<String>,
     },
     /// Remove a section
     RemoveSection {
-        name: String,
-        /// the index/position of the section to be edited
+        /// the name of the project
+        project_name: String,
+        /// the index/position of the section to be deleted (either name or position is required)
         #[arg(long, short)]
-        position: usize,
+        position: Option<usize>,
+        /// name of the section (either name or position is required)
+        #[arg(long, short)]
+        section_name: Option<String>,
     },
     Wav {
-        /// name of the project
-        name: String,
+        /// the name of the project
+        project_name: String,
         /// provide path or name to outfile. Defaults to "./Wav.name.wav"
         outfile: Option<PathBuf>,
     },
-    /// writes the project to disk in the midi format.
+    /// Writes the project to disk in the midi format.
     /// Midi defaults can be printed but not used in
     /// a profile, so values are provided here
     Midi {
         /// name of the project
-        name: String,
+        project_name: String,
         /// provide path or name to outfile. Defaults to "./Wav.name.wav"
         outfile: Option<PathBuf>,
         /// midi channel (0-15 - zero-indexed)
@@ -161,8 +180,9 @@ pub enum Cmd {
         #[arg(long)]
         vel_normal: Option<u8>,
     },
+    /// Plays the provided track/profile.
     Play {
-        name: String,
+        project_name: String,
         /// whether to run visualization while playing
         #[arg(long, short, default_value_t = false)]
         visualize: bool,

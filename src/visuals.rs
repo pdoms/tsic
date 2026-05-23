@@ -1,6 +1,8 @@
 use crate::section::TimeSignature;
 
+#[derive(Clone)]
 pub struct BeatEvent {
+    pub section_name: Option<String>,
     pub time: f64,
     pub beat: u32,
     pub beats_per_bar: u32,
@@ -14,21 +16,31 @@ pub struct BeatEvent {
 
 pub fn print_beat(event: &BeatEvent, next_event: Option<&BeatEvent>) {
     use std::io::Write;
-    let stdout = std::io::stdout();
-    let mut out = stdout.lock();
+    let mut out = std::io::stdout().lock();
 
     if event.beat == 0 && event.measure == 0 {
         let next = if let Some(next_event) = next_event {
             format!(
-                " -> [Next: {} | {} BPM]",
-                next_event.time_sig, next_event.bpm
+                " -> [Next:{}{} | {} BPM]",
+                if let Some(section_name) = next_event.section_name.as_ref() {
+                    format!(" {section_name} | ")
+                } else {
+                    String::from(" ")
+                },
+                next_event.time_sig,
+                next_event.bpm
             )
         } else {
             String::new()
         };
         write!(
             out,
-            "\r\n[Section {}/{} | {}/{} | {} BPM]{}\r\n\r\n",
+            "\r\n[Section: {}{}/{} | {}/{} | {} BPM]{}\r\n\r\n",
+            if let Some(section_name) = event.section_name.as_ref() {
+                format!(" {section_name} | ")
+            } else {
+                String::from(" ")
+            },
             event.section_index + 1,
             event.num_sections,
             event.time_sig.beats_per_bar,
@@ -37,6 +49,8 @@ pub fn print_beat(event: &BeatEvent, next_event: Option<&BeatEvent>) {
             next
         )
         .unwrap();
+    } else {
+        write!(out, "\x1B[2A").unwrap();
     }
 
     let mut bar = format!("  bar {}/{} | ", event.measure + 1, event.num_measures);
@@ -56,7 +70,7 @@ pub fn print_beat(event: &BeatEvent, next_event: Option<&BeatEvent>) {
     let caret_offset = prefix_len + (event.beat as usize * 2);
     let caret_ch = '^';
     let caret_line = format!("{:width$}{}", "", caret_ch, width = caret_offset);
-    write!(out, "\x1B[2A").unwrap(); // up 2 lines
+    //write!(out, "\x1B[2A").unwrap(); // up 2 lines
     write!(out, "\x1B[2K{}\r\n", bar).unwrap(); // clear line
     write!(out, "\x1B[2K{}\r\n", caret_line).unwrap(); // clear line
 
