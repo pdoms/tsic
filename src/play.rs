@@ -190,23 +190,21 @@ pub fn play(
                         player.pause();
                     }
                 }
-                KeyCode::Char(KEY_NEXT) => {
+                KeyCode::Char(KEY_NEXT) if current + 1 < num_sections => {
                     // go to next section
-                    if current + 1 < num_sections {
-                        current += 1;
-                        player.stop();
-                        let buf = sections[current].render_with_measures_f32(config);
-                        player.append(SectionSource::new(
-                            buf,
-                            config.sample_rate,
-                            done_tx.clone(),
-                            current,
-                        ));
-                        event_idx = 0;
-                        section_start = Instant::now();
-                        pause_offset = 0.0;
-                        pause_start = None;
-                    }
+                    current += 1;
+                    player.stop();
+                    let buf = sections[current].render_with_measures_f32(config);
+                    player.append(SectionSource::new(
+                        buf,
+                        config.sample_rate,
+                        done_tx.clone(),
+                        current,
+                    ));
+                    event_idx = 0;
+                    section_start = Instant::now();
+                    pause_offset = 0.0;
+                    pause_start = None;
                 }
                 KeyCode::Char(KEY_PREVIOUS) => {
                     // go to previous section
