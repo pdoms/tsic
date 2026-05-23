@@ -4,7 +4,7 @@ A command line tool to configure metronome click tracks with changing time signa
 
 ## Install
 
-Download the latest binary for your platform from the [releases page](https://github.com/YOUR_USERNAME/tsic/releases/latest).
+Download the latest binary for your platform from the [releases page](https://github.com/pdoms/tsic/releases/latest).
 
 | Platform | Binary |
 |----------|--------|
